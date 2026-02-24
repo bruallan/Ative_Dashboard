@@ -50,7 +50,7 @@ Este projeto está configurado para ser facilmente implantado na Vercel, utiliza
    - **Environment Variables**:
      Você **PRECISA** adicionar a variável de ambiente para o token do ClickUp.
      - Name: `CLICKUP_API_TOKEN`
-     - Value: `pk_87908883_PNJX99ZBG343SRG53Z7AKLEKLBOQCOQU` (ou o token atualizado).
+     - Value: `pk_...` (ou o token atualizado).
 5. Clique em **"Deploy"**.
 
 ## Passo 4: Verificar

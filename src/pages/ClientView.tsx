@@ -1,10 +1,3 @@
-
-
-
-
-
-
-
 import React, { useState, useEffect } from 'react';
 import { fetchClientTasks, fetchLists, fetchMacroOperationTasks, ClickUpTask, ClickUpList } from '../services/clickup';
 import { CLIENT_LIST_MAP } from '../config/clickupIds';
