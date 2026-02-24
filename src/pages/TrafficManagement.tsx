@@ -48,6 +48,7 @@ const TrafficManagement: React.FC = () => {
                     </div>
                 </div>
 
+
                 <div className="card full-width border-2 border-yellow-500" style={{ minHeight: '500px' }}>
                     <h3>Performance Macro (Looker)</h3>
                     <div style={{ height: '100%', width: '100%', background: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: '12px', overflow: 'hidden', position: 'relative', minHeight: '450px' }}>
@@ -58,7 +59,6 @@ const TrafficManagement: React.FC = () => {
                             frameBorder="0" 
                             style={{ border: 0, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }} 
                             allowFullScreen
-                            sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
                         ></iframe>
                     </div>
                 </div>
