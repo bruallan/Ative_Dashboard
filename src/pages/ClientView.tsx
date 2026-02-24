@@ -1,3 +1,10 @@
+
+
+
+
+
+
+
 import React, { useState, useEffect } from 'react';
 import { fetchClientTasks, fetchLists, fetchMacroOperationTasks, ClickUpTask, ClickUpList } from '../services/clickup';
 import { CLIENT_LIST_MAP } from '../config/clickupIds';
@@ -80,15 +87,16 @@ const ClientView: React.FC = () => {
         setSelectedClientName(e.target.value);
     };
     
+
     return (
-        <div id="tab-clientes" className="tab-content" style={{ display: 'flex', flexDirection: 'column', width: '100%', maxWidth: '100%' }}>
-            <div className="header">
+        <div id="tab-clientes" className="tab-content" style={{ display: 'flex', flexDirection: 'column', width: '100%', height: 'calc(100vh - 60px)' }}>
+            <div className="header" style={{ flexShrink: 0 }}>
                 <div className="page-title">
                     <h1>Lupa por Cliente</h1>
                 </div>
             </div>
 
-            <select className="client-selector" value={selectedClientName} onChange={handleClientChange}>
+            <select className="client-selector" value={selectedClientName} onChange={handleClientChange} style={{ flexShrink: 0 }}>
                 <option value="" disabled>Selecione um Cliente</option>
                 {clients.map(client => (
                     <option key={client.id} value={client.name}>{client.name}</option>
@@ -96,7 +104,7 @@ const ClientView: React.FC = () => {
             </select>
 
             {clientInfo && (
-                <div className="client-info-bar" style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', marginBottom: '20px', background: 'white', padding: '15px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                <div className="client-info-bar" style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', marginBottom: '20px', background: 'white', padding: '15px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', flexShrink: 0 }}>
                     <div><strong>Status:</strong> <span style={{ color: 'var(--primary)' }}>{clientInfo.onboarding}</span></div>
                     <div><strong>Account:</strong> {clientInfo.account}</div>
                     <div><strong>GT:</strong> {clientInfo.gt}</div>
@@ -104,12 +112,12 @@ const ClientView: React.FC = () => {
                 </div>
             )}
 
-            {/* Layout changed from grid to flex column for full width control */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', width: '100%' }}>
+            {/* Layout changed to grid for 16:9 optimization */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', width: '100%', flex: 1, minHeight: 0 }}>
                 
                 {/* Card 1: Saúde do Cliente */}
-                <div className="card" style={{ width: '100%', boxSizing: 'border-box', border: '2px solid #10b981' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <div className="card" style={{ width: '100%', boxSizing: 'border-box', border: '2px solid #10b981', display: 'flex', flexDirection: 'column', height: '100%' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
                         <h3 style={{ margin: 0 }}>Saúde do Cliente por Etapa</h3>
                         <div style={{ display: 'flex', gap: '10px' }}>
                             <button 
@@ -146,7 +154,7 @@ const ClientView: React.FC = () => {
                     </div>
 
                     {viewMode === 'donut' ? (
-                        <div className="donut-container">
+                        <div className="donut-container" style={{ flex: 1, alignItems: 'center', display: 'flex', justifyContent: 'space-around' }}>
                             <div className="donut-wrapper">
                                 <div className="donut-chart" style={{ background: 'conic-gradient(#3b82f6 0% 70%, #e5e7eb 70% 100%)' }}>
                                     <div className="donut-inner">70%</div>
@@ -170,7 +178,7 @@ const ClientView: React.FC = () => {
                             </div>
                         </div>
                     ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px', marginTop: '20px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px', marginTop: '20px', overflowY: 'auto', flex: 1 }}>
                             <div style={{ background: '#f9fafb', padding: '15px', borderRadius: '12px', gridColumn: '1 / -1' }}>
                                 <h4 style={{ margin: '0 0 15px', fontSize: '14px', color: '#1f2937', borderBottom: '2px solid #3b82f6', paddingBottom: '8px' }}>
                                     Tarefas Operacionais (ClickUp)
@@ -190,9 +198,9 @@ const ClientView: React.FC = () => {
                 </div>
 
                 {/* Card 2: Looker Studio */}
-                <div className="card" style={{ width: '100%', boxSizing: 'border-box', border: '2px solid #f59e0b', minHeight: '600px' }}>
+                <div className="card" style={{ width: '100%', boxSizing: 'border-box', border: '2px solid #f59e0b', display: 'flex', flexDirection: 'column', height: '100%' }}>
                     <h3>Performance Tráfego (Looker)</h3>
-                    <div style={{ width: '100%', height: '600px', background: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: '12px', overflow: 'hidden', position: 'relative', marginTop: '15px' }}>
+                    <div style={{ flex: 1, width: '100%', background: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: '12px', overflow: 'hidden', position: 'relative', marginTop: '15px' }}>
                         <iframe 
                             width="100%" 
                             height="100%" 

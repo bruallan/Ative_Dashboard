@@ -19,10 +19,11 @@ const TrafficManagement: React.FC = () => {
                 </div>
             </div>
 
-            <div className="grid-container">
-                <div className="card full-width border-2 border-green-500">
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', width: '100%', height: 'calc(100vh - 150px)' }}>
+                <div className="card" style={{ width: '100%', boxSizing: 'border-box', border: '2px solid #10b981', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                     <h3>Pipeline de Tráfego</h3>
-                    <div style={{ marginTop: '20px' }}>
+                    <div style={{ marginTop: '20px', overflowY: 'auto', flex: 1 }}>
                         {tasks.length === 0 && <p style={{ color: '#6b7280', textAlign: 'center' }}>Nenhuma tarefa encontrada.</p>}
                         {tasks.map((task) => (
                             <div key={task.id} className="traffic-item">
@@ -49,9 +50,9 @@ const TrafficManagement: React.FC = () => {
                 </div>
 
 
-                <div className="card full-width border-2 border-yellow-500" style={{ minHeight: '500px' }}>
+                <div className="card" style={{ width: '100%', boxSizing: 'border-box', border: '2px solid #f59e0b', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                     <h3>Performance Macro (Looker)</h3>
-                    <div style={{ height: '100%', width: '100%', background: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: '12px', overflow: 'hidden', position: 'relative', minHeight: '450px' }}>
+                    <div style={{ flex: 1, width: '100%', background: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: '12px', overflow: 'hidden', position: 'relative', marginTop: '15px' }}>
                         <iframe 
                             width="100%" 
                             height="100%" 
