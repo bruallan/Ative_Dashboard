@@ -1,10 +1,9 @@
+
+
 import { CLICKUP_LISTS } from '../config/clickupIds';
 
-// Base da nossa rota de API interna do Next.js
 const API_BASE = '/api/clickup';
 
-// --- INTERFACES ---
-// As interfaces ajudam o TypeScript a entender o formato dos dados que estamos recebendo da API.
 
 export interface ClickUpTask {
     id: string;
@@ -12,7 +11,15 @@ export interface ClickUpTask {
     status: { status: string; color: string };
     assignees: { id: number; username: string; profilePicture: string; initials?: string; color?: string }[];
     due_date: string | null;
-    custom_fields?: { id: string; name: string; type: string; value?: any; type_config?: any }[];
+    custom_fields?: { 
+        id: string; 
+        name: string; 
+        type: string; 
+        value?: any; 
+        type_config?: { 
+            options?: { id: string; name: string; orderindex: number; color?: string }[] 
+        } 
+    }[];
     list?: { id: string; name: string };
 }
 
@@ -22,11 +29,6 @@ export interface ClickUpList {
 }
 
 
-// --- FUNÇÕES DE BUSCA (FETCH) ---
-
-/**
- * Busca todas as listas (projetos) dentro de uma pasta específica.
- */
 export async function fetchLists(folderId: string): Promise<ClickUpList[]> {
     try {
         const response = await fetch(`${API_BASE}/folder/${folderId}/list?archived=false`);
@@ -41,54 +43,137 @@ export async function fetchLists(folderId: string): Promise<ClickUpList[]> {
     }
 }
 
+export interface ClickUpMember {
+    id: number;
+    username: string;
+    email: string;
+    color: string;
+    profilePicture: string;
+    initials: string;
+    role: number;
+    custom_role?: string;
+    last_active?: string;
+    date_joined?: string;
+    date_invited?: string;
+}
+
+export interface ClickUpTeam {
+    id: string;
+    name: string;
+    members: ClickUpMember[];
+}
+
 /**
- * Busca todas as tarefas dentro de uma lista específica.
- * [CORRIGIDO] Agora a URL é montada corretamente evitando erros de formatação com "?" e "&".
+ * Helper to fetch all tasks with pagination (The "Sync" Logic)
+ * Matches the Python guide's "Sistema Completo: Paginação"
  */
-export async function fetchTasks(listId: string, includeCustomFields = false): Promise<ClickUpTask[]> {
-    // Prevenção de erro: se o listId não existir, interrompemos a busca e retornamos vazio.
-    if (!listId) {
-        console.warn('fetchTasks chamado com listId indefinido (undefined). Verifique seus IDs configurados.');
+async function fetchPaginatedTasks(endpoint: string, params: Record<string, string | number | boolean> = {}): Promise<ClickUpTask[]> {
+    let allTasks: ClickUpTask[] = [];
+    let page = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+        // Construct query params
+        // Note: We explicitly set subtasks and include_closed to true as per the guide
+        const queryParams = new URLSearchParams();
+        Object.entries(params).forEach(([key, value]) => {
+            queryParams.append(key, String(value));
+        });
+        queryParams.set('page', String(page));
+        queryParams.set('subtasks', 'true');
+        queryParams.set('include_closed', 'true');
+
+        try {
+            const response = await fetch(`${API_BASE}${endpoint}?${queryParams.toString()}`);
+            if (!response.ok) {
+                console.error(`Failed to fetch page ${page} from ${endpoint}: ${response.statusText}`);
+                throw new Error(`Failed to fetch tasks from ${endpoint}`);
+            }
+
+            const data = await response.json();
+            const tasks = data.tasks || [];
+
+            if (tasks.length === 0) {
+                hasMore = false;
+            } else {
+                allTasks = [...allTasks, ...tasks];
+                page++;
+            }
+        } catch (error) {
+            console.error(`Error fetching paginated tasks from ${endpoint}:`, error);
+            hasMore = false; // Stop on error to return what we have
+        }
+    }
+
+    return allTasks;
+}
+
+
+export async function fetchWorkspaceMembers(): Promise<ClickUpMember[]> {
+    try {
+        const response = await fetch(`${API_BASE}/team`);
+        if (!response.ok) {
+            throw new Error('Failed to fetch teams');
+        }
+        const data = await response.json();
+        // Assuming the first team is the target workspace
+        if (data.teams && data.teams.length > 0) {
+            return data.teams[0].members;
+        }
+        return [];
+    } catch (error) {
+        console.error('Error fetching workspace members:', error);
         return [];
     }
-    
-    try {
-        // Usamos URLSearchParams para garantir que os parâmetros da URL fiquem perfeitos
-        const queryParams = new URLSearchParams();
-        queryParams.append('archived', 'false'); // Não queremos tarefas arquivadas
-        
-        // Adiciona os campos personalizados (custom fields) apenas se for solicitado
-        if (includeCustomFields) {
-            queryParams.append('include_custom_fields', 'true');
-        }
+}
 
-        // Monta a URL final com segurança
-        const url = `${API_BASE}/list/${listId}/task?${queryParams.toString()}`;
-        
-        const response = await fetch(url);
+export async function fetchMemberTasks(memberId: number): Promise<ClickUpTask[]> {
+    try {
+        // First, we need the team ID. We can cache it or fetch it again.
+        // For simplicity, we'll fetch teams again or hardcode if known.
+        // Better to fetch teams to get the ID dynamically.
+        const teamsResponse = await fetch(`${API_BASE}/team`);
+        const teamsData = await teamsResponse.json();
+        const teamId = teamsData.teams[0].id;
+
+        // Fetch tasks for the member across the workspace
+        // We include subtasks and closed tasks to get a full picture if needed, 
+        // but for "Active Tasks" we might want to filter.
+        // The user wants "A fazer", "Fazendo", "Feito", "Entregue".
+        // So we need all statuses.
+        const response = await fetch(`${API_BASE}/team/${teamId}/task?assignees[]=${memberId}&include_closed=true&subtasks=true`);
         
         if (!response.ok) {
-            throw new Error(`Falha ao buscar tarefas para a lista ${listId}: Status ${response.status}`);
+            throw new Error(`Failed to fetch tasks for member ${memberId}`);
         }
-        
         const data = await response.json();
-        
-        // Verifica se data.tasks existe para evitar quebrar a aplicação caso a API mude a resposta
-        if (data && data.tasks) {
-            return data.tasks;
-        } else {
-             console.warn(`A API do ClickUp retornou um formato inesperado para a lista ${listId}`, data);
-             return [];
+        return data.tasks;
+    } catch (error) {
+        console.error(`Error fetching tasks for member ${memberId}:`, error);
+        return [];
+    }
+}
+
+
+export async function fetchTasks(listId: string, includeCustomFields = false): Promise<ClickUpTask[]> {
+    try {
+        // Use fetchPaginatedTasks to ensure we get ALL tasks including closed ones if needed
+        // For specific lists, we might want to be careful about "include_closed", but the guide suggests fetching everything.
+        // However, for "Active" counts, we filter in memory.
+        const params: Record<string, string | boolean> = {
+            archived: 'false'
+        };
+        if (includeCustomFields) {
+            params.include_custom_fields = 'true';
         }
+        
+        return await fetchPaginatedTasks(`/list/${listId}/task`, params);
     } catch (error) {
         console.error('Error fetching tasks:', error);
         return [];
     }
 }
 
-/**
- * Conta o número total de tarefas em uma lista.
- */
 export async function fetchListCount(listId: string): Promise<number> {
     try {
         const tasks = await fetchTasks(listId);
@@ -99,21 +184,17 @@ export async function fetchListCount(listId: string): Promise<number> {
     }
 }
 
-// --- FUNÇÕES ESPECÍFICAS DOS COMPONENTES ---
-
 export async function fetchActiveClientsCount(): Promise<number> {
     return fetchListCount(CLICKUP_LISTS.ACC_OPERACAO_MACRO);
 }
 
 export async function fetchPendingMeetingsCount(): Promise<number> {
     const tasks = await fetchTasks(CLICKUP_LISTS.ACC_REUNIOES_PESQUISAS);
-    // Filtra apenas as que não estão concluídas ou fechadas
     return tasks.filter(t => t.status.status !== 'complete' && t.status.status !== 'closed').length;
 }
 
 export async function fetchDemandsFilterCount(): Promise<number> {
     const tasks = await fetchTasks(CLICKUP_LISTS.ACC_FILTRO_DEMANDAS);
-    // Filtra apenas as que não estão concluídas ou fechadas
     return tasks.filter(t => t.status.status !== 'complete' && t.status.status !== 'closed').length;
 }
 
@@ -126,35 +207,48 @@ export async function fetchClientTasks(listId: string): Promise<ClickUpTask[]> {
 }
 
 export async function fetchMacroOperationTasks(): Promise<ClickUpTask[]> {
-    // Aqui pedimos true para 'includeCustomFields' para pegar dados de responsáveis, status, etc.
     return fetchTasks(CLICKUP_LISTS.ACC_OPERACAO_MACRO, true);
 }
 
-/**
- * Busca tarefas de várias listas para agrupar na visão de "Performance Time"
- * [CORRIGIDO] Adicionado filtro de segurança caso algum ID esteja faltando no arquivo de configuração.
- */
 export async function fetchAllOpenTasks(): Promise<ClickUpTask[]> {
-    // Array com todos os IDs de listas que queremos buscar
+    // Fetch from main operational lists to aggregate per user
     const listIds = [
         CLICKUP_LISTS.ACC_FILTRO_DEMANDAS,
         CLICKUP_LISTS.GT_GESTAO_TRAFEGO,
         CLICKUP_LISTS.GC_GESTAO_CONTEUDO,
-        CLICKUP_LISTS.TICKETS,            
-        CLICKUP_LISTS.DSN_ATIVE_CONECTA,  
-        CLICKUP_LISTS.ACAO_METEORICA      
+        CLICKUP_LISTS.TICKETS,
+        CLICKUP_LISTS.DSN_ATIVE_CONECTA,
+        CLICKUP_LISTS.ACAO_METEORICA
     ];
 
-    // O .filter(Boolean) cria um novo array apenas com os IDs que realmente existem (não são undefined ou vazios)
-    const validListIds = listIds.filter(Boolean);
-
     const allTasks: ClickUpTask[] = [];
-    
-    // Fazemos um loop passando por todos os IDs válidos
-    for (const id of validListIds) {
-        const tasks = await fetchTasks(id); // Busca as tarefas daquele ID específico
-        allTasks.push(...tasks); // Junta essas tarefas no nosso "saco" total (allTasks)
+    for (const id of listIds) {
+        const tasks = await fetchTasks(id);
+        // Add list info to task if needed for context
+        allTasks.push(...tasks);
     }
-    
     return allTasks;
 }
+
+/**
+ * Helper to extract "Cliente" custom field value from a task.
+ * Matches Python guide Point 4 logic.
+ */
+export function getClientNameFromTask(task: ClickUpTask): string | null {
+    if (!task.custom_fields) return null;
+
+    const clientField = task.custom_fields.find(f => f.name === 'Cliente');
+    if (!clientField || clientField.value === undefined || clientField.value === null) return null;
+
+    // Handle dropdown/label type fields (common for "Cliente")
+    if (clientField.type_config && clientField.type_config.options) {
+        const selectedOption = clientField.type_config.options.find(
+            opt => opt.orderindex === clientField.value || opt.id === clientField.value
+        );
+        return selectedOption ? selectedOption.name : null;
+    }
+
+    // Handle text fields
+    return String(clientField.value);
+}
+

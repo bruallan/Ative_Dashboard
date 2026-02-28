@@ -10,8 +10,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
     return (
         <div className="sidebar">
             <div className="logo">
-                <i className="fa-solid fa-layer-group"></i>
-                ative<span>360°</span>
+                <img src="/Logo/logo.png" alt="Ative 360 Logo" style={{ maxWidth: '100%', height: 'auto', marginBottom: '10px' }} />
             </div>
             <div className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
                 <i className="fa-solid fa-chart-pie"></i> Visão Executiva

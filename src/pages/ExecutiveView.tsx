@@ -30,6 +30,7 @@ const ExecutiveView: React.FC = () => {
                 <div className="card border-2 border-yellow-500"><div className="kpi-label">Críticos</div><div className="kpi-value" style={{ color: 'var(--danger)' }}>8</div></div>
                 <div className="card border-2 border-yellow-500"><div className="kpi-label">Gargalo</div><div className="kpi-value" style={{ fontSize: '22px' }}>Aprovação (ACC)</div></div>
 
+
                 <div className="card half-width border-2 border-yellow-500">
                     <h3 style={{ marginTop: 0, fontSize: '16px' }}>Distribuição e Status (Período Selecionado)</h3>
                     <div className="stacked-bar-container">
@@ -56,8 +57,19 @@ const ExecutiveView: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            <div className="card full-width" style={{ height: '800px', padding: 0, overflow: 'hidden' }}>
+                <iframe 
+                    src="https://lookerstudio.google.com/embed/reporting/fe045f5b-e1e8-4105-acaf-56f759367bb4/page/E5RwD" 
+                    frameBorder="0" 
+                    style={{ width: '100%', height: '100%', border: 0 }} 
+                    allowFullScreen
+                    title="Looker Studio Dashboard"
+                ></iframe>
+            </div>
         </div>
     );
 };
+
 
 export default ExecutiveView;

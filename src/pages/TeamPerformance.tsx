@@ -4,64 +4,145 @@
 
 import React, { useState, useEffect } from 'react';
 import TimeFilter from '../components/TimeFilter';
-import { fetchAllOpenTasks, ClickUpTask } from '../services/clickup';
-
-// Hardcoded list of collaborators based on the request to find workspace members.
-// Since we don't have a direct API call implemented to fetch workspace members in the previous steps,
-// and the user provided specific names in the initial mock data which likely correspond to real people,
-// we will use a static list for now but structure it to be easily replaced by an API call later.
-// In a real scenario, we would fetch this from GET /team/{team_id} or similar.
-
-const TEAM_MEMBERS = [
-    { id: 1, name: "Matheus Neri", role: "Account", initials: "MN", color: "#3b82f6" },
-    { id: 2, name: "Ana Silva", role: "Design", initials: "AS", color: "#ef4444" },
-    { id: 3, name: "Carlos GT", role: "Tráfego", initials: "CG", color: "#10b981" },
-    { id: 4, name: "Beatriz Copy", role: "Conteúdo", initials: "BC", color: "#f59e0b" },
-    { id: 5, name: "Raquel", role: "Audiovisual", initials: "RA", color: "#8b5cf6" },
-    { id: 6, name: "Alexandre", role: "Growth", initials: "AL", color: "#ec4899" },
-    { id: 7, name: "Camila", role: "Gestão", initials: "CA", color: "#6366f1" },
-    { id: 8, name: "Nicollas", role: "Growth", initials: "NI", color: "#14b8a6" },
-    { id: 9, name: "Isadora", role: "Instagram", initials: "IS", color: "#f97316" }
-];
+import { fetchWorkspaceMembers, fetchMemberTasks, ClickUpMember, ClickUpTask } from '../services/clickup';
 
 const TeamPerformance: React.FC = () => {
+    const [members, setMembers] = useState<ClickUpMember[]>([]);
+    const [memberTasks, setMemberTasks] = useState<Record<number, ClickUpTask[]>>({});
+    const [loading, setLoading] = useState(true);
     const [selectedCollab, setSelectedCollab] = useState<any | null>(null);
-    const [collabTasks, setCollabTasks] = useState<Record<string, ClickUpTask[]>>({});
 
     useEffect(() => {
-        fetchAllOpenTasks().then(tasks => {
-            const tasksByCollab: Record<string, ClickUpTask[]> = {};
-            
-            tasks.forEach(task => {
-                task.assignees.forEach(assignee => {
-                    // Match assignee to our team member list by name (approximate)
-                    // In real app, match by ID. Here we use name matching or just group by assignee username.
-                    // Let's group by assignee username directly from ClickUp task
-                    const key = assignee.username;
-                    if (!tasksByCollab[key]) {
-                        tasksByCollab[key] = [];
-                    }
-                    tasksByCollab[key].push(task);
-                });
-            });
-            setCollabTasks(tasksByCollab);
-        });
+        const loadData = async () => {
+            setLoading(true);
+            try {
+                const fetchedMembers = await fetchWorkspaceMembers();
+                setMembers(fetchedMembers);
+
+                const tasksData: Record<number, ClickUpTask[]> = {};
+                await Promise.all(fetchedMembers.map(async (member) => {
+                    const tasks = await fetchMemberTasks(member.id);
+                    tasksData[member.id] = tasks;
+                }));
+                setMemberTasks(tasksData);
+            } catch (error) {
+                console.error("Failed to load team data", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadData();
     }, []);
 
-    const openCollabModal = (collab: any) => {
-        setSelectedCollab(collab);
+    const getTaskStatusCategory = (status: string, dueDate: string | null) => {
+        const now = Date.now();
+        const isOverdue = dueDate && parseInt(dueDate) < now && status !== 'complete' && status !== 'closed';
+        
+        if (status === 'complete' || status === 'closed') return 'done';
+        if (isOverdue) return 'overdue';
+        if (status === 'in progress' || status === 'doing') return 'in_progress';
+        return 'todo';
+    };
+
+    const getMemberStats = (memberId: number) => {
+        const tasks = memberTasks[memberId] || [];
+        const stats = {
+            done: 0,
+            overdue: 0,
+            in_progress: 0,
+            todo: 0,
+            total: tasks.length,
+            active: 0
+        };
+
+        tasks.forEach(task => {
+            const category = getTaskStatusCategory(task.status.status, task.due_date);
+            if (category === 'done') stats.done++;
+            else if (category === 'overdue') stats.overdue++;
+            else if (category === 'in_progress') stats.in_progress++;
+            else stats.todo++;
+
+            if (category !== 'done') stats.active++;
+        });
+
+        return stats;
+    };
+
+    const renderDonutChart = (stats: any) => {
+        const total = stats.total || 1; // Avoid division by zero
+        const radius = 38;
+        const circumference = 2 * Math.PI * radius;
+        
+        const doneOffset = circumference - (stats.done / total) * circumference;
+        const overdueOffset = circumference - (stats.overdue / total) * circumference;
+        const inProgressOffset = circumference - (stats.in_progress / total) * circumference;
+        const todoOffset = circumference - (stats.todo / total) * circumference;
+
+        // Calculate segments
+        // We need cumulative offsets for SVG stroke-dasharray
+        // But simple way is to use segments with offsets
+        
+        let currentOffset = 0;
+        const segments = [
+            { color: '#10b981', value: stats.done },       // Green
+            { color: '#ef4444', value: stats.overdue },    // Red
+            { color: '#f59e0b', value: stats.in_progress }, // Yellow
+            { color: '#9ca3af', value: stats.todo }        // Gray
+        ];
+
+        return (
+            <svg width="90" height="90" viewBox="0 0 100 100" style={{ position: 'absolute', top: '-5px', left: '50%', transform: 'translateX(-50%) rotate(-90deg)' }}>
+                {segments.map((seg, i) => {
+                    const strokeDasharray = `${(seg.value / total) * circumference} ${circumference}`;
+                    const strokeDashoffset = -currentOffset;
+                    currentOffset += (seg.value / total) * circumference;
+                    return (
+                        <circle
+                            key={i}
+                            cx="50"
+                            cy="50"
+                            r={radius}
+                            fill="transparent"
+                            stroke={seg.color}
+                            strokeWidth="6"
+                            strokeDasharray={strokeDasharray}
+                            strokeDashoffset={strokeDashoffset}
+                        />
+                    );
+                })}
+            </svg>
+        );
+    };
+
+    const openCollabModal = (member: ClickUpMember) => {
+        setSelectedCollab({
+            ...member,
+            tasks: memberTasks[member.id] || []
+        });
     };
 
     const closeCollabModal = () => {
         setSelectedCollab(null);
     };
 
-    // Helper to find tasks for a team member
-    const getTasksForMember = (memberName: string) => {
-        // Try to find key that includes member first name
-        const firstName = memberName.split(' ')[0].toLowerCase();
-        const key = Object.keys(collabTasks).find(k => k.toLowerCase().includes(firstName));
-        return key ? collabTasks[key] : [];
+    const groupTasksByStatus = (tasks: ClickUpTask[]) => {
+        const groups = {
+            'A fazer': [] as ClickUpTask[],
+            'Fazendo': [] as ClickUpTask[],
+            'Feito': [] as ClickUpTask[],
+            'Entregue': [] as ClickUpTask[]
+        };
+
+        tasks.forEach(task => {
+            const status = task.status.status.toLowerCase();
+            if (status === 'complete') groups['Feito'].push(task);
+            else if (status === 'closed') groups['Entregue'].push(task);
+            else if (status === 'in progress' || status === 'doing') groups['Fazendo'].push(task);
+            else groups['A fazer'].push(task);
+        });
+
+        return groups;
     };
 
     return (
@@ -73,49 +154,117 @@ const TeamPerformance: React.FC = () => {
                 <TimeFilter />
             </div>
 
-            <div className="collab-grid" id="team-grid">
-                {TEAM_MEMBERS.map(c => {
-                    const memberTasks = getTasksForMember(c.name);
-                    const pendingCount = memberTasks.length;
-                    
-                    return (
-                        <div key={c.id} className="collab-card high border-2 border-yellow-500" onClick={() => openCollabModal({ ...c, tasks: memberTasks })}>
-                            <div className="collab-avatar-placeholder" style={{ background: c.color, color: 'white', width: '60px', height: '60px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: 'bold', margin: '0 auto 15px' }}>
-                                {c.initials}
-                            </div>
-                            <h3 style={{ margin: 0 }}>{c.name}</h3>
-                            <p style={{ fontSize: '12px', color: '#9ca3af' }}>{c.role}</p>
-                            <div style={{ marginTop: '15px' }}>
-                                <div style={{ fontSize: '24px', fontWeight: 800, color: pendingCount > 0 ? 'var(--primary)' : 'var(--success)' }}>
-                                    {pendingCount}
+            {loading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
+                    <div className="spinner"></div>
+                </div>
+
+            ) : (
+                <div className="collab-grid" id="team-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+                    {members.map(member => {
+                        const stats = getMemberStats(member.id);
+
+                        
+                        return (
+                            <div key={member.id} className="collab-card high" onClick={() => openCollabModal(member)} style={{ position: 'relative', overflow: 'visible', paddingTop: '30px' }}>
+                                <div style={{ position: 'relative', width: '80px', height: '80px', margin: '0 auto 15px' }}>
+                                    {renderDonutChart(stats)}
+                                    <div className="collab-avatar-placeholder" style={{ 
+                                        background: member.color, 
+                                        color: 'white', 
+                                        width: '60px', 
+                                        height: '60px', 
+                                        borderRadius: '50%', 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        justifyContent: 'center', 
+                                        fontSize: '24px', 
+                                        fontWeight: 'bold',
+                                        position: 'absolute',
+                                        top: '10px',
+                                        left: '10px',
+                                        zIndex: 1
+                                    }}>
+                                        {member.profilePicture ? (
+                                            <img src={member.profilePicture} alt={member.username} style={{ width: '100%', height: '100%', borderRadius: '50%' }} />
+                                        ) : (
+                                            member.initials
+                                        )}
+                                    </div>
                                 </div>
-                                <div style={{ fontSize: '12px', color: '#6b7280' }}>Tarefas Ativas</div>
+                                
+                                <h3 style={{ margin: 0 }}>{member.username}</h3>
+                                <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '4px' }}>{member.custom_role || 'Membro'}</p>
+                                
+                                <div style={{ marginTop: '15px' }}>
+                                    <div style={{ fontSize: '24px', fontWeight: 800, color: stats.active > 0 ? 'var(--primary)' : 'var(--success)' }}>
+                                        {stats.active}
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: '#6b7280' }}>Tarefas Ativas</div>
+                                </div>
+                                <small style={{ color: '#6b7280', fontSize: '10px', marginTop: '10px', display: 'block' }}>Clique para ver tarefas</small>
                             </div>
-                            <small style={{ color: '#6b7280', fontSize: '10px', marginTop: '10px', display: 'block' }}>Clique para ver tarefas</small>
-                        </div>
-                    );
-                })}
-            </div>
+                        );
+                    })}
+                </div>
+            )}
 
             {selectedCollab && (
                 <div id="modal-overlay" className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) closeCollabModal(); }}>
-                    <div className="modal-content">
+                    <div className="modal-content" style={{ maxWidth: '800px', width: '90%' }}>
                         <span className="close-btn" onClick={closeCollabModal}>&times;</span>
-                        <h2 id="modal-title" style={{ marginTop: 0 }}>Tarefas: {selectedCollab.name}</h2>
-                        <div id="modal-body" style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                            {selectedCollab.tasks && selectedCollab.tasks.length > 0 ? (
-                                selectedCollab.tasks.map((t: ClickUpTask) => (
-                                    <div key={t.id} className="modal-task-item">
-                                        <div style={{ fontWeight: 600 }}>{t.name}</div>
-                                        <div style={{ fontSize: '12px', display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
-                                            <span style={{ color: t.status.color }}>● {t.status.status.toUpperCase()}</span>
-                                            {t.due_date && <span style={{ color: '#6b7280' }}>{new Date(parseInt(t.due_date)).toLocaleDateString('pt-BR')}</span>}
-                                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
+                            <div style={{ 
+                                width: '50px', 
+                                height: '50px', 
+                                borderRadius: '50%', 
+                                background: selectedCollab.color, 
+                                color: 'white', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center', 
+                                marginRight: '15px',
+                                fontSize: '20px',
+                                fontWeight: 'bold'
+                            }}>
+                                {selectedCollab.profilePicture ? (
+                                    <img src={selectedCollab.profilePicture} alt={selectedCollab.username} style={{ width: '100%', height: '100%', borderRadius: '50%' }} />
+                                ) : (
+                                    selectedCollab.initials
+                                )}
+                            </div>
+                            <div>
+                                <h2 id="modal-title" style={{ margin: 0 }}>{selectedCollab.username}</h2>
+                                <p style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>{selectedCollab.custom_role || 'Membro'}</p>
+                            </div>
+                        </div>
+
+                        <div className="task-columns" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px' }}>
+                            {Object.entries(groupTasksByStatus(selectedCollab.tasks)).map(([status, tasks]) => (
+                                <div key={status} className="task-column">
+                                    <h4 style={{ 
+                                        borderBottom: `2px solid ${
+                                            status === 'A fazer' ? '#9ca3af' : 
+                                            status === 'Fazendo' ? '#f59e0b' : 
+                                            status === 'Feito' ? '#10b981' : '#3b82f6'
+                                        }`,
+                                        paddingBottom: '8px',
+                                        marginBottom: '10px'
+                                    }}>
+                                        {status} ({tasks.length})
+                                    </h4>
+                                    <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                                        {tasks.map(t => (
+                                            <div key={t.id} className="modal-task-item" style={{ padding: '10px', background: '#f9fafb', borderRadius: '8px', marginBottom: '8px', border: '1px solid #e5e7eb' }}>
+                                                <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: '5px' }}>{t.name}</div>
+                                                <div style={{ fontSize: '11px', display: 'flex', justifyContent: 'space-between', color: '#6b7280' }}>
+                                                    {t.due_date && <span>{new Date(parseInt(t.due_date)).toLocaleDateString('pt-BR')}</span>}
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))
-                            ) : (
-                                <p style={{ color: '#6b7280', textAlign: 'center' }}>Nenhuma tarefa ativa encontrada.</p>
-                            )}
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </div>
